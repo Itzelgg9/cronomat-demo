@@ -37,4 +37,16 @@ los toma de un archivo, aplicando las mismas reglas de permiso que aplica el
 servidor de verdad: un profesor no puede ver los horarios de otro, y control
 escolar no puede salirse de su plantel.
 
-La demo es solo de consulta: no guarda cambios.
+## Se puede usar, no solo mirar
+
+Entrando como `admin` puedes **programar clases** haciendo clic en el calendario,
+borrarlas, y dar de alta cursos, materias, grupos y profesores. Se aplican las
+mismas reglas que en el sistema real:
+
+- Un profesor no puede tener dos clases a la misma hora
+- Un grupo tampoco, salvo que sean dos áreas propedéuticas distintas
+- La hora de fin tiene que ser posterior a la de inicio
+- El correo y el celular de un profesor se validan al capturarlos
+
+Los cambios se guardan **en tu propio navegador**: son solo tuyos, nadie más los
+ve, y con el botón *Restablecer* de la esquina vuelve todo a como estaba.
