@@ -115,33 +115,8 @@
     return json({ error: 'La demo no incluye esta sección.' }, 404);
   };
 
-  // ---------- Ayuda con las cuentas de muestra ----------
-  const ETIQUETA = { administrador: 'Administrador', administrativo: 'Control escolar', profesor: 'Profesor' };
-
+  // El sello de DEMO se muestra una vez cargada la pantalla
   document.addEventListener('DOMContentLoaded', () => {
-    const caja = document.getElementById('demo-cuentas');
-    if (caja) {
-      caja.innerHTML = `
-        <div class="demo-cuentas-titulo">Cuentas de muestra · contraseña <b>${CLAVE}</b></div>
-        ${D.sesiones.map((s) => `
-          <button type="button" class="demo-cuenta" data-usuario="${s.usuario}">
-            <span class="demo-cuenta-datos">
-              <span class="demo-cuenta-rol">${ETIQUETA[s.rol]}${s.plantel ? ` · ${s.plantel}` : ''}</span>
-              <span class="demo-cuenta-usuario">${s.usuario}</span>
-            </span>
-            ${s.clases ? `<span class="demo-cuenta-carga">${s.clases} clases</span>` : ''}
-          </button>`).join('')}`;
-
-      // Al elegir una cuenta se llenan los campos y se entra
-      caja.addEventListener('click', (e) => {
-        const b = e.target.closest('.demo-cuenta');
-        if (!b) return;
-        document.getElementById('login-usuario').value = b.dataset.usuario;
-        document.getElementById('login-password').value = CLAVE;
-        document.getElementById('login-form').requestSubmit();
-      });
-    }
-
     const sello = document.getElementById('demo-sello-flotante');
     if (sello) sello.hidden = false;
   });
