@@ -881,12 +881,39 @@ td { font-variant-numeric: tabular-nums; }
   .seg { flex: 1; }
 }
 
-/* ---------- Barra del modo demo ---------- */
-.demo-barra {
+/* ---------- Modo demo ---------- */
+
+/* Cuentas de muestra, dentro de la tarjeta de acceso */
+.demo-cuentas {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border-fuerte);
+}
+.demo-cuentas-titulo {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  text-align: center;
+}
+.demo-cuenta {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; margin-bottom: 5px; padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  font-family: inherit; cursor: pointer; text-align: left;
+  transition: background .15s var(--paso), border-color .15s var(--paso);
+}
+.demo-cuenta:hover { background: var(--primary-soft); border-color: var(--primary-borde); }
+.demo-cuenta-rol { font-size: 12.5px; font-weight: 650; color: var(--text); }
+.demo-cuenta-usuario { font-size: 11.5px; color: var(--text-soft); font-family: ui-monospace, monospace; }
+
+/* Sello flotante, una vez dentro */
+.demo-sello-flotante {
   position: fixed;
   left: 50%; bottom: 16px; transform: translateX(-50%);
   display: flex; align-items: center; gap: 11px;
-  padding: 9px 14px;
+  padding: 8px 14px;
   background: var(--surface);
   border: 1px solid var(--border-fuerte);
   border-radius: var(--r-full);
@@ -900,17 +927,7 @@ td { font-variant-numeric: tabular-nums; }
   padding: 3px 9px; border-radius: var(--r-full);
 }
 .demo-txt { font-size: 12.5px; color: var(--text-muted); font-weight: 550; white-space: nowrap; }
-.demo-barra select {
-  padding: 6px 11px;
-  border: 1px solid var(--border-fuerte);
-  border-radius: var(--r-sm);
-  font-family: inherit; font-size: 13px; font-weight: 600;
-  color: var(--text); background: var(--surface);
-  max-width: 260px;
-}
-.demo-link { font-size: 12.5px; color: var(--primary); font-weight: 650; text-decoration: none; }
-
 @media (max-width: 640px) {
-  .demo-txt { display: none; }
-  .demo-barra { bottom: 10px; padding: 7px 10px; }
+  .demo-sello-flotante { bottom: 10px; padding: 6px 11px; }
+  .demo-txt { font-size: 11.5px; }
 }

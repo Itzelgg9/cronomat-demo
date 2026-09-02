@@ -3,20 +3,28 @@
  *
  * Se carga ANTES que app.js e intercepta las llamadas a /api/... para
  * responderlas con los datos horneados en datos.js, aplicando las mismas reglas
- * de permiso que aplica el servidor real. Asi la demo se comporta igual que el
- * sistema, pero sin backend.
+ * que aplica el servidor real: sin iniciar sesion no se ve nada, y quien eres
+ * lo determina el usuario y la contrasena con que entras.
  */
 (function () {
   const D = window.DEMO;
   if (!D) return;
 
-  let sesion = D.sesiones[0];               // se arranca como administrador
-  const guardada = (() => { try { return localStorage.getItem('demo-rol'); } catch { return null; } })();
-  if (guardada) sesion = D.sesiones.find((s) => s.usuario === guardada) || sesion;
+  const CLAVE = 'demo';                 // la misma para todas las cuentas de muestra
+  const LLAVE = 'demo-sesion';
+  let sesion = null;
+
+  // Se recuerda la sesion entre recargas, como haria la cookie del servidor
+  try {
+    const guardada = localStorage.getItem(LLAVE);
+    if (guardada) sesion = D.sesiones.find((s) => s.usuario === guardada) || null;
+  } catch { /* modo privado */ }
 
   const json = (datos, status = 200) => Promise.resolve(new Response(
     JSON.stringify(datos), { status, headers: { 'Content-Type': 'application/json' } }
   ));
+  const sinSesion = () => json({ error: 'Necesitas iniciar sesión' }, 401);
+  const sinPermiso = () => json({ error: 'Tu usuario no tiene permiso para esta acción' }, 403);
 
   // Mismas reglas que el servidor: cada rol ve solo lo suyo
   function horariosDe(params) {
@@ -46,8 +54,7 @@
       }
       if (plantel) {
         const gs = D.gruposDeClase[h.id] || [h.grupo_id];
-        const suyo = gs.some((g) => (D.grupos.find((x) => x.id === g) || {}).plantel === plantel);
-        if (!suyo) return false;
+        if (!gs.some((g) => (D.grupos.find((x) => x.id === g) || {}).plantel === plantel)) return false;
       }
       return true;
     });
@@ -63,9 +70,28 @@
     const [camino, consulta] = ruta.split('?');
     const params = new URLSearchParams(consulta || '');
 
-    if (camino === 'me') return json(sesion);
-    if (camino === 'login') return json(sesion);
-    if (camino === 'logout') return json({ ok: true });
+    // ---- Acceso ----
+    if (camino === 'login') {
+      let cuerpo = {};
+      try { cuerpo = JSON.parse(opciones.body || '{}'); } catch { /* vacio */ }
+      const encontrada = D.sesiones.find((s) => s.usuario === String(cuerpo.usuario || '').trim());
+      if (!encontrada || String(cuerpo.password) !== CLAVE) {
+        return json({ error: 'Usuario o contraseña incorrectos' }, 401);
+      }
+      sesion = encontrada;
+      try { localStorage.setItem(LLAVE, sesion.usuario); } catch { /* modo privado */ }
+      return json(sesion);
+    }
+    if (camino === 'logout') {
+      sesion = null;
+      try { localStorage.removeItem(LLAVE); } catch { /* modo privado */ }
+      return json({ ok: true });
+    }
+    if (camino === 'me') return sesion ? json(sesion) : sinSesion();
+
+    // ---- De aqui en adelante hace falta sesion ----
+    if (!sesion) return sinSesion();
+
     if (camino.startsWith('horarios')) {
       if ((opciones.method || 'GET') !== 'GET') {
         return json({ error: 'La demo es solo de consulta: no guarda cambios.' }, 403);
@@ -73,38 +99,47 @@
       return horariosDe(params);
     }
     if (camino.startsWith('grupos')) {
+      if (sesion.rol === 'profesor') return sinPermiso();
       const lista = sesion.rol === 'administrativo' && sesion.plantel
         ? D.grupos.filter((g) => g.plantel === sesion.plantel)
         : D.grupos;
-      return sesion.rol === 'profesor'
-        ? json({ error: 'Tu usuario no tiene permiso para esta acción' }, 403)
-        : json(lista);
+      return json(lista);
     }
     if (camino.startsWith('profesores')) {
-      return sesion.rol === 'administrador'
-        ? json(D.profesores)
-        : json({ error: 'Tu usuario no tiene permiso para esta acción' }, 403);
+      return sesion.rol === 'administrador' ? json(D.profesores) : sinPermiso();
     }
     if (camino.startsWith('cursos')) return json(D.cursos);
     if (camino.startsWith('materias')) return json(D.materias);
     if (camino.startsWith('areas')) return json(D.areas);
-    if (camino.startsWith('usuarios')) {
-      return json({ error: 'Tu usuario no tiene permiso para esta acción' }, 403);
-    }
+    if (camino.startsWith('usuarios')) return sinPermiso();
     return json({ error: 'La demo no incluye esta sección.' }, 404);
   };
 
-  // ---------- Selector de rol ----------
+  // ---------- Ayuda con las cuentas de muestra ----------
+  const ETIQUETA = { administrador: 'Administrador', administrativo: 'Control escolar', profesor: 'Profesor' };
+
   document.addEventListener('DOMContentLoaded', () => {
-    const sel = document.getElementById('demo-rol');
-    if (!sel) return;
-    const etiqueta = { administrador: 'Administrador', administrativo: 'Control escolar', profesor: 'Profesor' };
-    sel.innerHTML = D.sesiones.map((s) =>
-      `<option value="${s.usuario}" ${s.usuario === sesion.usuario ? 'selected' : ''}>`
-      + `${etiqueta[s.rol]} — ${s.nombre}</option>`).join('');
-    sel.addEventListener('change', () => {
-      try { localStorage.setItem('demo-rol', sel.value); } catch { /* modo privado */ }
-      location.reload();
-    });
+    const caja = document.getElementById('demo-cuentas');
+    if (caja) {
+      caja.innerHTML = `
+        <div class="demo-cuentas-titulo">Cuentas de muestra · contraseña <b>${CLAVE}</b></div>
+        ${D.sesiones.map((s) => `
+          <button type="button" class="demo-cuenta" data-usuario="${s.usuario}">
+            <span class="demo-cuenta-rol">${ETIQUETA[s.rol]}</span>
+            <span class="demo-cuenta-usuario">${s.usuario}</span>
+          </button>`).join('')}`;
+
+      // Al elegir una cuenta se llenan los campos y se entra
+      caja.addEventListener('click', (e) => {
+        const b = e.target.closest('.demo-cuenta');
+        if (!b) return;
+        document.getElementById('login-usuario').value = b.dataset.usuario;
+        document.getElementById('login-password').value = CLAVE;
+        document.getElementById('login-form').requestSubmit();
+      });
+    }
+
+    const sello = document.getElementById('demo-sello-flotante');
+    if (sello) sello.hidden = false;
   });
 })();

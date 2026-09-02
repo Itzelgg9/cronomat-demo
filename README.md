@@ -5,13 +5,19 @@ Demostración navegable del sistema de gestión de horarios académicos de
 
 👉 **[Abrir la demo](https://itzelgg9.github.io/cronomat-demo/)**
 
-Con el selector de abajo puedes recorrer el sistema como cada tipo de usuario:
+Se entra con usuario y contraseña, igual que en el sistema real: quién eres lo
+determina la cuenta con la que inicias sesión, no un selector.
 
-| Usuario | Qué ve |
-|---|---|
-| **Administrador** | Todo: cursos, materias, profesores, grupos y el calendario completo por plantel |
-| **Control escolar** | Solo consulta, y únicamente los horarios de su plantel (hay uno de Hidalgo y otro de San Cosme) |
-| **Profesor** | Solo su propio horario semanal |
+La contraseña de todas las cuentas de muestra es **`demo`**.
+
+| Usuario | Rol | Qué ve |
+|---|---|---|
+| `admin` | Administrador | Todo: cursos, materias, profesores, grupos y el calendario completo por plantel |
+| `control.hidalgo` | Control escolar | Solo consulta, y únicamente los horarios del plantel Hidalgo |
+| `control.sancosme` | Control escolar | Lo mismo, pero del plantel San Cosme |
+| `profesor` | Profesor | Solo su propio horario semanal |
+
+En la pantalla de acceso están listadas: al hacer clic en una, entra directo.
 
 ## Sobre los datos
 
