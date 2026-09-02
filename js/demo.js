@@ -223,6 +223,7 @@
       return json({ ok: true });
     }
     if (camino === 'me') return sesion ? json(sesion) : sinSesion();
+    // Cambiar contrasena no existe en la demo
     if (camino === 'me/password') {
       return json({ error: 'En la demo no se puede cambiar la contraseña.' }, 403);
     }
@@ -339,6 +340,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    // En la demo no se cambia la contrasena: se retira el boton
+    const btnClave = document.getElementById('btn-password');
+    if (btnClave) btnClave.remove();
+
     const sello = document.getElementById('demo-sello-flotante');
     if (sello) sello.hidden = false;
     const btn = document.getElementById('demo-reset');
