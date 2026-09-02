@@ -125,8 +125,11 @@
         <div class="demo-cuentas-titulo">Cuentas de muestra · contraseña <b>${CLAVE}</b></div>
         ${D.sesiones.map((s) => `
           <button type="button" class="demo-cuenta" data-usuario="${s.usuario}">
-            <span class="demo-cuenta-rol">${ETIQUETA[s.rol]}</span>
-            <span class="demo-cuenta-usuario">${s.usuario}</span>
+            <span class="demo-cuenta-datos">
+              <span class="demo-cuenta-rol">${ETIQUETA[s.rol]}${s.plantel ? ` · ${s.plantel}` : ''}</span>
+              <span class="demo-cuenta-usuario">${s.usuario}</span>
+            </span>
+            ${s.clases ? `<span class="demo-cuenta-carga">${s.clases} clases</span>` : ''}
           </button>`).join('')}`;
 
       // Al elegir una cuenta se llenan los campos y se entra
