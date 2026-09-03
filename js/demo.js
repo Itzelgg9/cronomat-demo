@@ -316,7 +316,6 @@
           apellido_materno: c.apellido_materno || null,
           correo: c.correo || null,
           celular: c.celular || null,
-          color: c.color || '#3B82F6',
         }));
       }
       if (metodo === 'DELETE') return bajaCatalogo('profesores', id);

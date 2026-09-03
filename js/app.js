@@ -758,7 +758,7 @@ async function renderProfesores() {
   });
 }
 function profesorCard(p) {
-  return `<div class="card" data-prof-id="${p.id}" style="border-left:4px solid ${p.color || '#4f46e5'}">
+  return `<div class="card" data-prof-id="${p.id}">
     <h3>${esc(p.nombre)} ${esc(p.apellido_paterno || '')}</h3>
     <div class="meta">${esc(p.correo || 'Sin correo')}</div>
     <div class="meta">${esc(p.celular || 'Sin celular')}</div>
@@ -771,7 +771,6 @@ function profesorFormModal(profesor = null) {
       <div class="field"><label>Nombre</label><input id="f-nombre" value="${profesor ? esc(profesor.nombre) : ''}"></div>
       <div class="field"><label>Apellido paterno</label><input id="f-ap" value="${profesor ? esc(profesor.apellido_paterno || '') : ''}"></div>
       <div class="field"><label>Apellido materno</label><input id="f-am" value="${profesor ? esc(profesor.apellido_materno || '') : ''}"></div>
-      <div class="field"><label>Color</label><input id="f-color" type="color" value="${profesor ? (profesor.color || '#4f46e5') : '#4f46e5'}"></div>
       <div class="field"><label>Correo (para notificaciones)</label><input id="f-correo" type="email" value="${profesor ? esc(profesor.correo || '') : ''}" placeholder="correo@ejemplo.com"></div>
       <div class="field"><label>Celular (para WhatsApp)</label><input id="f-celular" value="${profesor ? esc(profesor.celular || '') : ''}" placeholder="5511223344"></div>
       <div class="field"><label>Usuario</label><input id="f-usuario" value="${profesor ? esc(profesor.usuario || '') : ''}"></div>
@@ -788,7 +787,6 @@ function profesorFormModal(profesor = null) {
         nombre: box.querySelector('#f-nombre').value.trim(),
         apellido_paterno: box.querySelector('#f-ap').value.trim(),
         apellido_materno: box.querySelector('#f-am').value.trim(),
-        color: box.querySelector('#f-color').value,
         correo: box.querySelector('#f-correo').value.trim(),
         celular: box.querySelector('#f-celular').value.trim(),
         usuario: box.querySelector('#f-usuario').value.trim(),
