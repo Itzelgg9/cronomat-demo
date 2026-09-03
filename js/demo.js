@@ -36,6 +36,7 @@
   const cursos = () => [...D.cursos, ...cambios.cursos];
   const materias = () => [...D.materias, ...cambios.materias];
   const grupos = () => [...D.grupos, ...cambios.grupos];
+  const salones = () => D.salones || [];
   const profesores = () => [...D.profesores, ...cambios.profesores];
   const nuevoId = () => Date.now() * 10 + Math.floor(Math.random() * 10);
 
@@ -78,6 +79,8 @@
       if (hasta && h.fecha > hasta) return false;
       if (profesorId && String(h.profesor_id) !== String(profesorId)) return false;
       if (grupoId && !gruposDe(h).some((g) => String(g) === String(grupoId))) return false;
+      const salonId = params.get('salon_id');
+      if (salonId && String(h.salon_id) !== String(salonId)) return false;
       if (plantel) {
         const suyo = gruposDe(h).some((g) => (grupos().find((x) => x.id === g) || {}).plantel === plantel);
         if (!suyo) return false;
@@ -320,6 +323,59 @@
       }
       if (metodo === 'DELETE') return bajaCatalogo('profesores', id);
       return json({ error: 'La demo no incluye esta acción.' }, 404);
+    }
+
+    // ---- Salones ----
+    if (seccion === 'salones') {
+      if (metodo !== 'GET') return json({ error: 'La demo es solo de consulta para salones.' }, 403);
+      const mios = sesion.rol === 'administrativo' && sesion.plantel
+        ? salones().filter((s) => s.plantel === sesion.plantel)
+        : salones();
+
+      if (partes[1] === 'ocupacion') {
+        const desde = params.get('desde');
+        const hasta = params.get('hasta');
+        const lista = mios.map((s) => ({
+          ...s,
+          clases: horarios()
+            .filter((h) => String(h.salon_id) === String(s.id)
+              && (!desde || h.fecha >= desde) && (!hasta || h.fecha <= hasta))
+            .map((h) => ({
+              id: h.id, fecha: h.fecha, hora_inicio: h.hora_inicio, hora_fin: h.hora_fin,
+              grupo_id: h.grupo_id, grupo: h.grupo_nombre, materia: h.materia_nombre,
+              curso: h.curso_nombre, curso_color: h.curso_color,
+              profesor_id: h.profesor_id,
+              profesor: `${h.profesor_nombre || ''} ${h.profesor_apellido || ''}`.trim(),
+            })),
+        }));
+        return json(lista);
+      }
+
+      if (partes[1] === 'por-profesor') {
+        const desde = params.get('desde');
+        const hasta = params.get('hasta');
+        const porProf = new Map();
+        for (const h of horarios()) {
+          if (desde && h.fecha < desde) continue;
+          if (hasta && h.fecha > hasta) continue;
+          if (sesion.rol === 'administrativo' && sesion.plantel && h.plantel !== sesion.plantel) continue;
+          if (!porProf.has(h.profesor_id)) {
+            porProf.set(h.profesor_id, {
+              id: h.profesor_id,
+              profesor: `${h.profesor_nombre || ''} ${h.profesor_apellido || ''}`.trim(),
+              clases: [],
+            });
+          }
+          porProf.get(h.profesor_id).clases.push({
+            fecha: h.fecha, hora: `${h.hora_inicio} a ${h.hora_fin}`,
+            grupo: h.grupo_nombre, salon: h.salon_nombre || '(sin salón)',
+            plantel: h.plantel, materia: h.materia_nombre, curso: h.curso_nombre,
+          });
+        }
+        return json([...porProf.values()]);
+      }
+
+      return json(mios);
     }
 
     if (seccion === 'areas') return metodo === 'GET' ? json(D.areas) : sinPermiso();

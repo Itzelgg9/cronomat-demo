@@ -916,3 +916,91 @@ td { font-variant-numeric: tabular-nums; }
   transition: background .15s var(--paso), color .15s var(--paso);
 }
 .demo-reset:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+/* ---------- Vista de salones ---------- */
+.salon-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
+}
+.salon-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.salon-card.libre { opacity: .72; }
+.salon-cabeza {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.salon-cabeza h4 { margin: 0; font-size: 14.5px; font-weight: 700; }
+.salon-meta { font-size: 11.5px; color: var(--text-soft); }
+.salon-clases { padding: 4px 0 8px; }
+.salon-dia { padding: 6px 14px 2px; }
+.salon-dia-titulo {
+  font-size: 11px; font-weight: 700; color: var(--text-soft);
+  text-transform: capitalize; letter-spacing: .02em; margin-bottom: 5px;
+}
+.salon-clase {
+  display: flex; gap: 11px; align-items: flex-start;
+  padding: 7px 9px; margin-bottom: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: border-color .15s var(--paso), background .15s var(--paso);
+}
+.salon-clase:hover { border-color: var(--primary); background: var(--primary-soft); }
+.salon-clase-hora {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px;
+}
+.salon-clase-datos { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.salon-clase-curso { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; }
+.clase-punto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.salon-clase-grupo { font-size: 11.5px; color: var(--text); }
+.salon-clase-prof { font-size: 11px; color: var(--text-soft); }
+.salon-vacio { padding: 16px 14px; font-size: 12.5px; color: var(--text-soft); }
+
+.detalle-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.detalle-tabla td { padding: 7px 0; border: 0; }
+.detalle-tabla td:first-child { color: var(--text-muted); width: 130px; }
+
+/* ---------- Vista de mes ---------- */
+.mes-rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 10px;
+}
+.mes-dia {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 9px 10px;
+  min-height: 96px;
+}
+.mes-dia.vacio { background: var(--surface-2); opacity: .7; }
+.mes-dia.hoy { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.mes-dia-cabeza { display: flex; align-items: baseline; gap: 6px; margin-bottom: 7px; }
+.mes-dia-num { font-size: 16px; font-weight: 800; }
+.mes-dia-nombre { font-size: 10.5px; color: var(--text-soft); text-transform: uppercase; letter-spacing: .05em; }
+.mes-dia-conteo {
+  margin-left: auto; font-size: 10px; font-weight: 700;
+  background: var(--primary-soft); color: var(--primary);
+  padding: 1px 7px; border-radius: var(--r-full);
+}
+.mes-clase {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline;
+  border-left: 3px solid var(--border-fuerte);
+  padding: 3px 7px; margin-bottom: 3px;
+  background: var(--surface-2);
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  cursor: pointer; font-size: 11px;
+}
+.mes-clase:hover { background: var(--surface-3); }
+.mes-clase-hora { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.mes-clase-materia { font-weight: 600; }
+.mes-clase-salon { color: var(--text-soft); font-size: 10.5px; }

@@ -9,7 +9,8 @@ const state = {
   materias: [],
   profesores: [],
   grupos: [],
-  calSelectorType: 'profesor', // 'profesor' | 'grupo'
+  calSelectorType: 'profesor', // 'profesor' | 'grupo' | 'salon'
+  calVista: 'semana',          // 'dia' | 'semana' | 'mes'
   calSelectedId: null,
   calWeekStart: startOfWeek(new Date()),
 };
@@ -31,6 +32,7 @@ const ICONOS = {
   cursos: '<path d="M12 4 3 8l9 4 9-4-9-4Z"/><path d="M3 13l9 4 9-4"/><path d="M3 17.5l9 4 9-4"/>',
   materias: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5Z"/>',
   profesores: '<circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16.5 5.6a3.2 3.2 0 0 1 0 6.3"/><path d="M18 14.4A6.2 6.2 0 0 1 21.5 20"/>',
+  salones: '<path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><rect x="9.5" y="12" width="5" height="9"/>',
   grupos: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
   calendario: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/>',
 };
@@ -44,11 +46,13 @@ const TABS_POR_ROL = {
     { view: 'materias', label: 'Materias' },
     { view: 'profesores', label: 'Profesores' },
     { view: 'grupos', label: 'Grupos' },
+    { view: 'salones', label: 'Salones' },
     { view: 'calendario', label: 'Calendario' },
   ],
   administrativo: [
     { view: 'inicio', label: 'Inicio' },
     { view: 'grupos', label: 'Grupos' },
+    { view: 'salones', label: 'Salones' },
     { view: 'calendario', label: 'Horarios por grupo' },
   ],
   profesor: [
@@ -171,6 +175,7 @@ async function render() {
       case 'materias': return renderMaterias();
       case 'profesores': return renderProfesores();
       case 'grupos': return renderGrupos();
+      case 'salones': return renderSalones();
       case 'calendario': return renderCalendario();
       default: root.innerHTML = '<div class="empty-state">Vista no encontrada</div>';
     }
@@ -386,10 +391,12 @@ function rejillaCalendario(eventos, dias, {
       if (mostrarGrupo) {
         detalles.push(esc(ev.grupos_total > 1 ? ev.grupos_nombres.replace(/ \| /g, ', ') : ev.grupo_nombre));
       }
+      if (ev.salon_nombre) detalles.push(esc(ev.salon_nombre));
       if (ev.plantel) detalles.push(esc(ev.plantel));
       if (mostrarProfesor) detalles.push(esc(`${ev.profesor_nombre} ${ev.profesor_apellido || ''}`.trim()));
       const titulo = `${ev.hora_inicio} a ${ev.hora_fin} — ${ev.materia_nombre}`
         + (ev.curso_nombre ? ` (${ev.curso_nombre})` : '')
+        + (ev.salon_nombre ? ` — ${ev.salon_nombre}` : '')
         + (ev.area_nombre ? ` — ${ev.area_nombre}` : '')
         + (detalles.length ? ` — ${detalles.join(' · ')}` : '');
       const fondo = ev.curso_color || COLOR_SIN_CURSO;
@@ -595,6 +602,228 @@ async function renderInicio() {
   });
   document.getElementById('ini-hoy').addEventListener('click', () => {
     state.calWeekStart = startOfWeek(new Date()); renderInicio();
+  });
+}
+
+
+// ---------- SALONES ----------
+async function renderSalones() {
+  const { dias, desde, hasta } = rangoVista();
+  const [salones, ocupacion] = await Promise.all([
+    api('/salones'),
+    api(`/salones/ocupacion?desde=${fmtDate(desde)}&hasta=${fmtDate(hasta)}`),
+  ]);
+  state.salones = salones;
+
+  const conClases = ocupacion.filter((s) => s.clases.length);
+  const totalClases = ocupacion.reduce((t, s) => t + s.clases.length, 0);
+  const planteles = ordenarPlanteles([...new Set(salones.map((s) => s.plantel))]);
+
+  const root = document.getElementById('view-root');
+  root.innerHTML = `
+    ${encabezado({
+      sobre: 'Ocupación de aulas',
+      titulo: 'Salones',
+      sub: 'Qué grupo, con qué curso y con quién está en cada salón',
+      acciones: esAdmin() ? '<button class="btn" id="btn-new-salon">+ Nuevo salón</button>' : '',
+    })}
+    <div class="kpi-fila">
+      ${indicador({ etiqueta: 'Salones', valor: salones.length, acento: true,
+        pie: planteles.map((p) => `${esc(p)} ${salones.filter((s) => s.plantel === p).length}`).join(' · ') })}
+      ${indicador({ etiqueta: 'En uso este periodo', valor: conClases.length,
+        pie: `${salones.length - conClases.length} sin clases` })}
+      ${indicador({ etiqueta: 'Clases asignadas', valor: totalClases })}
+      ${indicador({ etiqueta: 'Cupo total', valor: salones.reduce((t, s) => t + (s.capacidad || 0), 0),
+        pie: 'lugares sumando todos los salones' })}
+    </div>
+
+    ${navegacionVista()}
+
+    ${ocupacion.length ? planteles.map((plantel) => {
+      const suyos = ocupacion.filter((s) => s.plantel === plantel);
+      if (!suyos.length) return '';
+      return `
+        <section class="plantel-bloque">
+          <div class="plantel-titulo">
+            <h3>Plantel ${esc(plantel)}</h3>
+            <span class="badge">${suyos.reduce((t, s) => t + s.clases.length, 0)} clase(s)</span>
+          </div>
+          <div class="plantel-cuerpo">
+            <div class="salon-lista">
+              ${suyos.map((s) => tarjetaSalon(s, dias)).join('')}
+            </div>
+          </div>
+        </section>`;
+    }).join('') : emptyState('No hay salones dados de alta', 'Crea el primero con el botón de arriba')}
+  `;
+
+  conectarNavegacion();
+  const btn = document.getElementById('btn-new-salon');
+  if (btn) btn.addEventListener('click', () => salonFormModal());
+
+  // Click en una clase: ver el detalle y poder cambiarla de salón o quitarla
+  root.querySelectorAll('[data-clase-id]').forEach((el) => {
+    el.addEventListener('click', () => detalleAsignacion(Number(el.dataset.claseId)));
+  });
+}
+
+function tarjetaSalon(salon, dias) {
+  const porDia = {};
+  for (const c of salon.clases) (porDia[c.fecha] = porDia[c.fecha] || []).push(c);
+  const conClases = Object.keys(porDia).length;
+
+  return `
+    <div class="salon-card ${salon.clases.length ? '' : 'libre'}">
+      <div class="salon-cabeza">
+        <div>
+          <h4>${esc(salon.nombre)}</h4>
+          <span class="salon-meta">${salon.capacidad ? `${salon.capacidad} lugares` : 'sin cupo definido'}</span>
+        </div>
+        <span class="badge">${salon.clases.length} clase(s)</span>
+      </div>
+      ${salon.clases.length ? `
+        <div class="salon-clases">
+          ${dias.filter((d) => porDia[fmtDate(d)]).map((d) => {
+            const f = fmtDate(d);
+            const lista = porDia[f].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+            return `
+              <div class="salon-dia">
+                <div class="salon-dia-titulo">${esc(fmtDiaLargo(d))}</div>
+                ${lista.map((c) => `
+                  <div class="salon-clase" data-clase-id="${c.id}" title="Ver o cambiar esta asignación">
+                    <span class="salon-clase-hora">${esc(c.hora_inicio)}–${esc(c.hora_fin)}</span>
+                    <span class="salon-clase-datos">
+                      <span class="salon-clase-curso">
+                        <span class="clase-punto" style="background:${esc(c.curso_color || COLOR_SIN_CURSO)}"></span>
+                        ${esc(c.curso || 'Sin curso')}
+                      </span>
+                      <span class="salon-clase-grupo">${esc(c.grupo)}</span>
+                      <span class="salon-clase-prof">${esc(c.materia)} · ${esc(c.profesor)}</span>
+                    </span>
+                  </div>`).join('')}
+              </div>`;
+          }).join('')}
+        </div>` : '<div class="salon-vacio">Sin clases en este periodo</div>'}
+    </div>`;
+}
+
+// Detalle de una clase desde la vista de salones: cambiar de salón o quitar la asignación
+async function detalleAsignacion(claseId) {
+  const salones = state.salones || await api('/salones');
+  const { desde, hasta } = rangoVista();
+  const todas = await api(`/horarios?desde=${fmtDate(desde)}&hasta=${fmtDate(hasta)}`);
+  const clase = todas.find((c) => c.id === claseId);
+  if (!clase) return showToast('No se encontró la clase', 'error');
+
+  const delPlantel = salones.filter((s) => s.plantel === clase.plantel);
+
+  openModal(`
+    <h3>Asignación del salón</h3>
+    <table class="detalle-tabla">
+      <tr><td>Curso</td><td><b>${esc(clase.curso_nombre || '—')}</b></td></tr>
+      <tr><td>Materia</td><td><b>${esc(clase.materia_nombre)}</b></td></tr>
+      <tr><td>Grupo</td><td><b>${esc(clase.grupo_nombre)}</b></td></tr>
+      <tr><td>Profesor</td><td>${esc(`${clase.profesor_nombre} ${clase.profesor_apellido || ''}`.trim())}</td></tr>
+      <tr><td>Plantel</td><td>${esc(clase.plantel || '—')}</td></tr>
+      <tr><td>Fecha</td><td>${esc(fmtDiaLargo(new Date(`${clase.fecha}T12:00:00`)))}</td></tr>
+      <tr><td>Horario</td><td>${esc(clase.hora_inicio)} a ${esc(clase.hora_fin)}</td></tr>
+      <tr><td>Salón actual</td><td><b>${esc(clase.salon_nombre || 'Sin asignar')}</b></td></tr>
+    </table>
+
+    <div class="field field-ancho" style="margin-top:18px">
+      <label>Cambiar a otro salón</label>
+      <select id="d-salon">
+        <option value="">Sin salón asignado</option>
+        ${delPlantel.map((s) => `<option value="${s.id}" ${String(s.id) === String(clase.salon_id) ? 'selected' : ''}>${esc(s.nombre)}${s.capacidad ? ` · ${s.capacidad} lugares` : ''}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-quitar">Quitar asignación</button>
+      <button class="btn secondary" id="btn-cancel">Cancelar</button>
+      <button class="btn" id="btn-guardar">Guardar cambio</button>
+    </div>
+  `, (box) => {
+    box.querySelector('#btn-cancel').addEventListener('click', closeModal);
+
+    box.querySelector('#btn-guardar').addEventListener('click', async () => {
+      const nuevo = box.querySelector('#d-salon').value;
+      if (String(nuevo || '') === String(clase.salon_id || '')) {
+        return showToast('No cambiaste de salón', 'info');
+      }
+      const nombreNuevo = nuevo
+        ? (delPlantel.find((s) => String(s.id) === String(nuevo)) || {}).nombre
+        : 'sin salón';
+
+      // Doble confirmación: mover un grupo de aula afecta a quienes ya lo sabían
+      if (!confirm(`Vas a mover al grupo ${clase.grupo_nombre} de ${clase.salon_nombre || 'sin salón'} a ${nombreNuevo}.\n\n¿Continuar?`)) return;
+      if (!confirm('Confirma otra vez: el cambio de salón queda guardado de inmediato.')) return;
+
+      try {
+        await api(`/horarios/${clase.id}/salon`, {
+          method: 'PUT', body: JSON.stringify({ salon_id: nuevo || null }),
+        });
+        closeModal();
+        showToast(`Movido a ${nombreNuevo}`, 'success');
+        renderSalones();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    box.querySelector('#btn-quitar').addEventListener('click', async () => {
+      if (!confirm(`¿Quitar el salón de esta clase?\n\nLa clase sigue programada, pero sin aula asignada.`)) return;
+      if (!confirm('Confirma otra vez para quitar la asignación.')) return;
+      try {
+        await api(`/horarios/${clase.id}/salon`, { method: 'PUT', body: JSON.stringify({ salon_id: null }) });
+        closeModal();
+        showToast('Asignación quitada', 'success');
+        renderSalones();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  });
+}
+
+function salonFormModal(salon = null) {
+  const planteles = [...new Set((state.grupos || []).map((g) => g.plantel).filter(Boolean))];
+  openModal(`
+    <h3>${salon ? 'Editar salón' : 'Nuevo salón'}</h3>
+    <div class="form-grid">
+      <div class="field"><label>Nombre</label>
+        <input id="s-nombre" value="${salon ? esc(salon.nombre) : ''}" placeholder="Aula 5"></div>
+      <div class="field"><label>Plantel</label>
+        <select id="s-plantel">
+          ${(planteles.length ? planteles : ['Hidalgo', 'San Cosme', 'Altamirano']).map((p) =>
+            `<option ${salon && salon.plantel === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Capacidad</label>
+        <input id="s-capacidad" type="number" min="1" value="${salon ? (salon.capacidad || '') : 30}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="btn-cancel">Cancelar</button>
+      <button class="btn" id="btn-save">Guardar</button>
+    </div>
+  `, (box) => {
+    box.querySelector('#btn-cancel').addEventListener('click', closeModal);
+    box.querySelector('#btn-save').addEventListener('click', async () => {
+      const payload = {
+        nombre: box.querySelector('#s-nombre').value.trim(),
+        plantel: box.querySelector('#s-plantel').value,
+        capacidad: Number(box.querySelector('#s-capacidad').value) || null,
+      };
+      if (!payload.nombre) return showToast('El nombre es obligatorio', 'error');
+      try {
+        if (salon) await api(`/salones/${salon.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/salones', { method: 'POST', body: JSON.stringify(payload) });
+        closeModal();
+        showToast('Salón guardado', 'success');
+        renderSalones();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
   });
 }
 
@@ -1022,6 +1251,80 @@ function addMin(hhmm, min) {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// Cuantos dias abarca cada vista y como se navega
+const DIAS_VISTA = { dia: 1, semana: 7, mes: 0 };
+
+function rangoVista() {
+  if (state.calVista === 'dia') {
+    return { dias: [new Date(state.calWeekStart)], desde: state.calWeekStart, hasta: state.calWeekStart };
+  }
+  if (state.calVista === 'mes') {
+    const d = new Date(state.calWeekStart);
+    const primero = new Date(d.getFullYear(), d.getMonth(), 1);
+    const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const dias = [];
+    for (let i = 1; i <= ultimo.getDate(); i++) dias.push(new Date(d.getFullYear(), d.getMonth(), i));
+    return { dias, desde: primero, hasta: ultimo };
+  }
+  const ini = startOfWeek(state.calWeekStart);
+  return { dias: Array.from({ length: 7 }, (_, i) => addDays(ini, i)), desde: ini, hasta: addDays(ini, 6) };
+}
+
+function etiquetaRango() {
+  const { desde, hasta } = rangoVista();
+  if (state.calVista === 'dia') return fmtDiaLargo(desde);
+  if (state.calVista === 'mes') {
+    return desde.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+  }
+  return `Semana del ${fmtDate(desde)} al ${fmtDate(hasta)}`;
+}
+
+function moverVista(pasos) {
+  if (state.calVista === 'dia') state.calWeekStart = addDays(state.calWeekStart, pasos);
+  else if (state.calVista === 'mes') {
+    const d = new Date(state.calWeekStart);
+    state.calWeekStart = new Date(d.getFullYear(), d.getMonth() + pasos, 1);
+  } else state.calWeekStart = addDays(state.calWeekStart, pasos * 7);
+}
+
+// Botones de día / semana / mes
+function selectorVista() {
+  return `<div class="segmentado" id="cal-vista">
+    ${['dia', 'semana', 'mes'].map((v) => `
+      <button type="button" class="seg ${state.calVista === v ? 'activo' : ''}" data-vista="${v}">
+        ${v === 'dia' ? 'Día' : v === 'semana' ? 'Semana' : 'Mes'}
+      </button>`).join('')}
+  </div>`;
+}
+
+function navegacionVista() {
+  return `
+    <div class="week-nav">
+      ${selectorVista()}
+      <button class="btn secondary small" id="week-prev">←</button>
+      <span class="label" id="week-label">${esc(etiquetaRango())}</span>
+      <button class="btn secondary small" id="week-next">→</button>
+      <button class="btn ghost small" id="week-hoy">Hoy</button>
+    </div>`;
+}
+
+function conectarNavegacion() {
+  const raiz = document.getElementById('view-root');
+  raiz.querySelectorAll('#cal-vista .seg').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.classList.contains('activo')) return;
+      state.calVista = b.dataset.vista;
+      renderCalendario();
+    });
+  });
+  document.getElementById('week-prev').addEventListener('click', () => { moverVista(-1); renderCalendario(); });
+  document.getElementById('week-next').addEventListener('click', () => { moverVista(1); renderCalendario(); });
+  document.getElementById('week-hoy').addEventListener('click', () => {
+    state.calWeekStart = state.calVista === 'semana' ? startOfWeek(new Date()) : new Date();
+    renderCalendario();
+  });
+}
+
 async function renderCalendario() {
   const root = document.getElementById('view-root');
 
@@ -1030,109 +1333,86 @@ async function renderCalendario() {
     state.calSelectorType = 'profesor';
     state.calSelectedId = state.usuario.profesor_id;
     root.innerHTML = `
-      <div class="view-header">
-        <div><h2>Mi horario</h2>
-        <div class="subtitle">${esc(state.usuario.nombre || '')}</div></div>
-      </div>
-      <div class="week-nav">
-        <button class="btn secondary small" id="week-prev">← Semana anterior</button>
-        <span class="label" id="week-label"></span>
-        <button class="btn secondary small" id="week-next">Semana siguiente →</button>
-      </div>
+      ${encabezado({ sobre: 'Mi jornada', titulo: 'Mi horario', sub: state.usuario.nombre || '' })}
+      ${navegacionVista()}
       <div id="calendar-container"></div>
     `;
-    document.getElementById('week-prev').addEventListener('click', () => {
-      state.calWeekStart = addDays(state.calWeekStart, -7); loadCalendarGrid();
-    });
-    document.getElementById('week-next').addEventListener('click', () => {
-      state.calWeekStart = addDays(state.calWeekStart, 7); loadCalendarGrid();
-    });
+    conectarNavegacion();
     await loadCalendarGrid();
     return;
   }
 
-  // ----- Control escolar: solo por grupo. Administrador: por profesor o grupo -----
+  // ----- Control escolar: por grupo o por salon. Administrador: tambien por profesor -----
   const soloGrupos = esAdministrativo();
-  if (soloGrupos) state.calSelectorType = 'grupo';
+  if (soloGrupos && state.calSelectorType === 'profesor') state.calSelectorType = 'grupo';
 
-  const grupos = await api('/grupos');
+  const [grupos, salones] = await Promise.all([api('/grupos'), api('/salones')]);
   state.grupos = grupos;
+  state.salones = salones;
   const profesores = soloGrupos ? [] : await api('/profesores');
   state.profesores = profesores;
 
+  const listaDe = (tipo) => (tipo === 'profesor' ? profesores : tipo === 'salon' ? salones : grupos);
   if (!state.calSelectedId) {
-    state.calSelectedId = state.calSelectorType === 'profesor'
-      ? (profesores[0] && profesores[0].id)
-      : (grupos[0] && grupos[0].id);
+    const l = listaDe(state.calSelectorType);
+    state.calSelectedId = l[0] && l[0].id;
   }
 
+  const tipos = soloGrupos
+    ? [['grupo', 'Por grupo'], ['salon', 'Por salón']]
+    : [['profesor', 'Por profesor'], ['grupo', 'Por grupo'], ['salon', 'Por salón']];
+
   root.innerHTML = `
-    <div class="view-header">
-      <div><h2>${soloGrupos ? 'Horarios por grupo' : 'Calendario'}</h2>
-      <div class="subtitle">Horario semanal</div></div>
-    </div>
+    ${encabezado({
+      sobre: soloGrupos ? `Plantel ${state.usuario.plantel || ''}` : 'Programación',
+      titulo: 'Calendario',
+      sub: 'Horario de 8:00 a 20:00',
+    })}
     <div class="toolbar">
-      ${soloGrupos ? '' : `
-      <div class="segmentado" role="tablist">
-        <button type="button" class="seg ${state.calSelectorType === 'profesor' ? 'activo' : ''}" data-tipo="profesor">Por profesor</button>
-        <button type="button" class="seg ${state.calSelectorType === 'grupo' ? 'activo' : ''}" data-tipo="grupo">Por grupo</button>
+      <div class="segmentado" id="cal-tipo-seg">
+        ${tipos.map(([v, t]) => `<button type="button" class="seg ${state.calSelectorType === v ? 'activo' : ''}" data-tipo="${v}">${t}</button>`).join('')}
       </div>
-      <select id="cal-tipo" class="hidden">
-        <option value="profesor" ${state.calSelectorType === 'profesor' ? 'selected' : ''}>Por profesor</option>
-        <option value="grupo" ${state.calSelectorType === 'grupo' ? 'selected' : ''}>Por grupo</option>
-      </select>`}
       <select id="cal-id"></select>
       ${esAdmin() ? '<button class="btn" id="btn-nueva-clase">+ Agregar clase</button>' : ''}
     </div>
-    <div class="week-nav">
-      <button class="btn secondary small" id="week-prev">← Semana anterior</button>
-      <span class="label" id="week-label"></span>
-      <button class="btn secondary small" id="week-next">Semana siguiente →</button>
-    </div>
+    ${navegacionVista()}
     <div id="calendar-container"></div>
   `;
 
-  const tipoSel = document.getElementById('cal-tipo');
   const idSel = document.getElementById('cal-id');
-  function refreshIdOptions() {
-    const list = (tipoSel ? tipoSel.value : state.calSelectorType) === 'profesor' ? profesores : grupos;
-    idSel.innerHTML = list.map((x) => `<option value="${x.id}">${esc(x.nombre)}${x.apellido_paterno ? ' ' + esc(x.apellido_paterno) : ''}</option>`).join('');
-    if (state.calSelectedId && list.some((x) => String(x.id) === String(state.calSelectedId))) {
+  function refrescarOpciones() {
+    const lista = listaDe(state.calSelectorType);
+    idSel.innerHTML = lista.map((x) => {
+      const etq = state.calSelectorType === 'salon'
+        ? `${x.nombre} · ${x.plantel}`
+        : `${x.nombre}${x.apellido_paterno ? ' ' + x.apellido_paterno : ''}`;
+      return `<option value="${x.id}">${esc(etq)}</option>`;
+    }).join('');
+    if (state.calSelectedId && lista.some((x) => String(x.id) === String(state.calSelectedId))) {
       idSel.value = state.calSelectedId;
-    } else if (list.length) {
-      state.calSelectedId = String(list[0].id);
+    } else if (lista.length) {
+      state.calSelectedId = String(lista[0].id);
       idSel.value = state.calSelectedId;
     }
   }
-  root.querySelectorAll('.seg').forEach((b) => {
-    b.addEventListener('click', () => {
-      if (!tipoSel || b.classList.contains('activo')) return;
-      root.querySelectorAll('.seg').forEach((o) => o.classList.toggle('activo', o === b));
-      tipoSel.value = b.dataset.tipo;
-      tipoSel.dispatchEvent(new Event('change'));
-    });
-  });
+  refrescarOpciones();
 
-  if (tipoSel) {
-    tipoSel.addEventListener('change', () => {
-      state.calSelectorType = tipoSel.value;
+  root.querySelectorAll('#cal-tipo-seg .seg').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.classList.contains('activo')) return;
+      root.querySelectorAll('#cal-tipo-seg .seg').forEach((o) => o.classList.toggle('activo', o === b));
+      state.calSelectorType = b.dataset.tipo;
       state.calSelectedId = null;
-      refreshIdOptions();
+      refrescarOpciones();
       loadCalendarGrid();
     });
-  }
+  });
   idSel.addEventListener('change', () => {
     state.calSelectedId = idSel.value;
     loadCalendarGrid();
   });
-  refreshIdOptions();
 
-  document.getElementById('week-prev').addEventListener('click', () => {
-    state.calWeekStart = addDays(state.calWeekStart, -7); loadCalendarGrid();
-  });
-  document.getElementById('week-next').addEventListener('click', () => {
-    state.calWeekStart = addDays(state.calWeekStart, 7); loadCalendarGrid();
-  });
+  conectarNavegacion();
   const btnNueva = document.getElementById('btn-nueva-clase');
   if (btnNueva) btnNueva.addEventListener('click', () => nuevaClaseModal());
 
@@ -1140,30 +1420,36 @@ async function renderCalendario() {
 }
 
 async function loadCalendarGrid() {
-  const weekStart = state.calWeekStart;
-  const weekEnd = addDays(weekStart, 6);
-  document.getElementById('week-label').textContent =
-    `Semana del ${fmtDate(weekStart)} al ${fmtDate(weekEnd)}`;
+  const { dias, desde, hasta } = rangoVista();
+  const etq = document.getElementById('week-label');
+  if (etq) etq.textContent = etiquetaRango();
 
-  const query = state.calSelectorType === 'profesor'
-    ? `profesor_id=${state.calSelectedId}` : `grupo_id=${state.calSelectedId}`;
-  const eventos = state.calSelectedId
-    ? await api(`/horarios?${query}&desde=${fmtDate(weekStart)}&hasta=${fmtDate(weekEnd)}`)
+  // El filtro depende de si se mira por profesor, por grupo o por salon
+  const filtro = state.calSelectorType === 'profesor' ? `profesor_id=${state.calSelectedId}`
+    : state.calSelectorType === 'salon' ? `salon_id=${state.calSelectedId}`
+      : `grupo_id=${state.calSelectedId}`;
+
+  const eventos = (esProfesor() || state.calSelectedId)
+    ? await api(`/horarios?${filtro}&desde=${fmtDate(desde)}&hasta=${fmtDate(hasta)}`)
     : [];
 
-  const dias = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  // Franja fija para que siempre haya rejilla donde hacer click, aunque no haya clases
   const container = document.getElementById('calendar-container');
+
+  // En el mes son demasiados dias para la rejilla: se muestra como lista por dia
+  if (state.calVista === 'mes') {
+    container.innerHTML = leyendaCursos(eventos) + vistaMes(eventos, dias);
+    if (esAdmin()) conectarBorrado(container);
+    return;
+  }
+
   container.innerHTML = leyendaCursos(eventos) + rejillaCalendario(eventos, dias, {
-    desde: '07:00',
-    hasta: '21:00',
+    desde: '08:00',
+    hasta: '20:00',
     interactivo: true,
-    mostrarProfesor: state.calSelectorType === 'grupo' || esAdmin(),
+    mostrarProfesor: state.calSelectorType !== 'profesor' || esAdmin(),
     mostrarGrupo: true,
   });
 
-  // Agregar y eliminar clases es exclusivo del administrador
   if (!esAdmin()) return;
 
   const rejilla = container.querySelector('.cal2');
@@ -1172,7 +1458,6 @@ async function loadCalendarGrid() {
   const altoSlot = Number(rejilla.dataset.alto);
   const minSlot = Number(rejilla.dataset.min);
 
-  // Click en un hueco: se calcula la hora a partir de donde se hizo click
   container.querySelectorAll('.cal2-dia').forEach((col) => {
     col.classList.add('editable');
     col.addEventListener('click', (e) => {
@@ -1182,25 +1467,66 @@ async function loadCalendarGrid() {
       nuevaClaseModal({
         fecha: col.dataset.fecha,
         hora_inicio: aHora(desdeMin + slot * minSlot),
+        salon_id: state.calSelectorType === 'salon' ? state.calSelectedId : null,
+        grupo_id: state.calSelectorType === 'grupo' ? state.calSelectedId : null,
+        profesor_id: state.calSelectorType === 'profesor' ? state.calSelectedId : null,
       });
     });
   });
 
-  container.querySelectorAll('[data-ev-id]').forEach((evEl) => {
-    evEl.addEventListener('click', async (e) => {
+  conectarBorrado(container);
+}
+
+// Vista de mes: una tarjeta por dia con sus clases en lista
+function vistaMes(eventos, dias) {
+  const porDia = {};
+  for (const e of eventos) (porDia[e.fecha] = porDia[e.fecha] || []).push(e);
+  const hoy = fmtDate(new Date());
+
+  return `<div class="mes-rejilla">
+    ${dias.map((d) => {
+      const f = fmtDate(d);
+      const lista = (porDia[f] || []).sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+      return `
+        <div class="mes-dia ${f === hoy ? 'hoy' : ''} ${lista.length ? '' : 'vacio'}">
+          <div class="mes-dia-cabeza">
+            <span class="mes-dia-num">${d.getDate()}</span>
+            <span class="mes-dia-nombre">${d.toLocaleDateString('es-MX', { weekday: 'short' })}</span>
+            ${lista.length ? `<span class="mes-dia-conteo">${lista.length}</span>` : ''}
+          </div>
+          ${lista.map((e) => `
+            <div class="mes-clase" data-ev-id="${e.id}"
+                 style="border-left-color:${esc(e.curso_color || COLOR_SIN_CURSO)}"
+                 title="${esc(`${e.hora_inicio} a ${e.hora_fin} — ${e.materia_nombre} — ${e.grupo_nombre}${e.salon_nombre ? ' · ' + e.salon_nombre : ''}`)}">
+              <span class="mes-clase-hora">${esc(e.hora_inicio)}</span>
+              <span class="mes-clase-materia">${esc(e.materia_nombre)}</span>
+              ${e.salon_nombre ? `<span class="mes-clase-salon">${esc(e.salon_nombre)}</span>` : ''}
+            </div>`).join('')}
+        </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// Borrar una clase, desde la rejilla o desde la vista de mes
+function conectarBorrado(container) {
+  container.querySelectorAll('[data-ev-id]').forEach((el) => {
+    el.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm('¿Eliminar esta clase del horario?')) {
-        await api(`/horarios/${evEl.dataset.evId}`, { method: 'DELETE' });
+      if (!confirm('¿Eliminar esta clase del horario?')) return;
+      try {
+        await api(`/horarios/${el.dataset.evId}`, { method: 'DELETE' });
         showToast('Clase eliminada', 'success');
         loadCalendarGrid();
+      } catch (err) {
+        showToast(err.message, 'error');
       }
     });
   });
 }
 
 async function nuevaClaseModal(prefill = {}) {
-  const [profesores, grupos, materias, areas] = await Promise.all([
-    api('/profesores'), api('/grupos'), api('/materias'), api('/areas'),
+  const [profesores, grupos, materias, areas, salones] = await Promise.all([
+    api('/profesores'), api('/grupos'), api('/materias'), api('/areas'), api('/salones'),
   ]);
 
   // Duraciones mas usadas; siempre se puede escribir la hora de fin a mano
@@ -1215,13 +1541,19 @@ async function nuevaClaseModal(prefill = {}) {
     <h3>Agregar clase al horario</h3>
     <div class="form-grid">
       <div class="field"><label>Profesor</label>
-        <select id="c-profesor">${profesores.map((p) => `<option value="${p.id}" ${String(p.id) === String(state.calSelectedId) && state.calSelectorType === 'profesor' ? 'selected' : ''}>${esc(p.nombre)} ${esc(p.apellido_paterno || '')}</option>`).join('')}</select>
+        <select id="c-profesor">${profesores.map((p) => `<option value="${p.id}" ${String(p.id) === String(prefill.profesor_id || (state.calSelectorType === 'profesor' ? state.calSelectedId : '')) ? 'selected' : ''}>${esc(p.nombre)} ${esc(p.apellido_paterno || '')}</option>`).join('')}</select>
       </div>
       <div class="field"><label>Grupo</label>
-        <select id="c-grupo">${grupos.map((g) => `<option value="${g.id}" ${String(g.id) === String(state.calSelectedId) && state.calSelectorType === 'grupo' ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
+        <select id="c-grupo">${grupos.map((g) => `<option value="${g.id}" ${String(g.id) === String(prefill.grupo_id || (state.calSelectorType === 'grupo' ? state.calSelectedId : '')) ? 'selected' : ''}>${esc(g.nombre)} · ${esc(g.plantel || '')}</option>`).join('')}</select>
       </div>
       <div class="field"><label>Materia</label>
         <select id="c-materia">${materias.map((m) => `<option value="${m.id}">${esc(m.nombre)} (${esc(m.curso_nombre)})</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Salón</label>
+        <select id="c-salon">
+          <option value="">Sin salón asignado</option>
+          ${salones.map((s) => `<option value="${s.id}" data-plantel="${esc(s.plantel)}" ${String(s.id) === String(prefill.salon_id || '') ? 'selected' : ''}>${esc(s.nombre)} · ${esc(s.plantel)}${s.capacidad ? ` (${s.capacidad})` : ''}</option>`).join('')}
+        </select>
       </div>
       <div class="field"><label>Fecha</label>
         <input type="date" id="c-fecha" value="${prefill.fecha || fmtDate(new Date())}">
@@ -1327,6 +1659,7 @@ async function nuevaClaseModal(prefill = {}) {
         fecha: box.querySelector('#c-fecha').value,
         hora_inicio: inicioEl.value,
         hora_fin: finEl.value,
+        salon_id: box.querySelector('#c-salon').value || null,
         area_id: areaEl.value || null,
         grupos_ids: areaEl.value
           ? [...extraCampo.querySelectorAll('input[type=checkbox]:checked')].map((c) => Number(c.value))
