@@ -46,7 +46,11 @@
   let sesion = null;
   try {
     const g = localStorage.getItem(LLAVE_SESION);
-    if (g) sesion = D.sesiones.find((s) => s.usuario === g) || null;
+    if (g) {
+      sesion = D.sesiones.find((s) => s.usuario === g) || null;
+      // La cuenta guardada ya no existe (la demo se regeneró): se limpia
+      if (!sesion) localStorage.removeItem(LLAVE_SESION);
+    }
   } catch { /* modo privado */ }
 
   const json = (datos, status = 200) => Promise.resolve(new Response(

@@ -1004,3 +1004,13 @@ td { font-variant-numeric: tabular-nums; }
 .mes-clase-hora { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .mes-clase-materia { font-weight: 600; }
 .mes-clase-salon { color: var(--text-soft); font-size: 10.5px; }
+
+/* Fechas del grupo en su tarjeta */
+.grupo-fechas {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 9px; padding-top: 9px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px; color: var(--text-muted);
+}
+.grupo-fechas b { color: var(--text-soft); font-weight: 600; display: inline-block; min-width: 54px; }
+.card .pill { margin-top: 9px; }

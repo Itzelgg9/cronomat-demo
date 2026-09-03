@@ -15,8 +15,8 @@ La contraseña de todas las cuentas de muestra es **`demo`**.
 | `admin` | Administrador | Todo: cursos, materias, profesores, grupos y el calendario completo por plantel |
 | `control.hidalgo` | Control escolar | Solo consulta, y únicamente los horarios del plantel Hidalgo |
 | `control.sancosme` | Control escolar | Lo mismo, pero del plantel San Cosme |
-| `quetzal.cortes` | Profesor | Su horario semanal — carga alta, 46 clases |
-| `olivia.lara` | Profesor | Su horario semanal — carga baja, 2 clases |
+| `profesor1` | Profesor | Su horario semanal — carga alta |
+| `profesor2` | Profesor | Su horario semanal — carga baja |
 
 Hay dos profesores a propósito: uno con la semana llena y otro con muy pocas
 clases, para ver cómo se comporta el calendario en ambos casos.

@@ -1201,25 +1201,69 @@ async function renderGrupos() {
   });
 }
 function grupoCard(g) {
+  const corta = (f) => (f ? new Date(`${f}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: '2-digit' }) : '—');
+  // Un grupo cuyo examen ya pasó hace más de 15 días está listo para archivarse
+  let estado = '';
+  if (g.fecha_examen) {
+    const limite = new Date(`${g.fecha_examen}T12:00:00`);
+    limite.setDate(limite.getDate() + 15);
+    const hoy = new Date();
+    if (hoy > limite) estado = '<span class="pill warn">Listo para archivar</span>';
+    else if (hoy > new Date(`${g.fecha_examen}T12:00:00`)) estado = '<span class="pill ok">Examen presentado</span>';
+  }
   return `<div class="card" data-grupo-id="${g.id}">
     <h3>${esc(g.nombre)}</h3>
     <div class="meta">${esc(g.plantel || 'Sin plantel')}</div>
-    <button class="btn small secondary" data-cal="${g.id}" style="margin-top:8px">📅 Ver calendario</button>
+    <div class="grupo-fechas">
+      <span><b>Inicia</b> ${esc(corta(g.fecha_inicio))}</span>
+      <span><b>Termina</b> ${esc(corta(g.fecha_fin))}</span>
+      <span><b>Examen</b> ${esc(corta(g.fecha_examen))}</span>
+    </div>
+    ${estado}
+    <button class="btn small secondary" data-cal="${g.id}" style="margin-top:10px">Ver calendario</button>
   </div>`;
 }
 function grupoFormModal(grupo = null) {
   openModal(`
     <h3>${grupo ? 'Editar grupo' : 'Nuevo grupo'}</h3>
-    <div class="form-grid single">
-      <div class="field"><label>Nombre</label><input id="f-nombre" value="${grupo ? esc(grupo.nombre) : ''}" placeholder="Ej. CP Martinez Nuno Carlos"></div>
-      <div class="field"><label>Plantel</label><input id="f-plantel" value="${grupo ? esc(grupo.plantel || '') : ''}" placeholder="Ej. Hidalgo"></div>
+    <div class="form-grid">
+      <div class="field field-ancho"><label>Nombre</label>
+        <input id="f-nombre" value="${grupo ? esc(grupo.nombre) : ''}" placeholder="Ej. CB13001nov 31agosto2026 LaV 8a11"></div>
+      <div class="field field-ancho"><label>Plantel</label>
+        <input id="f-plantel" value="${grupo ? esc(grupo.plantel || '') : ''}" placeholder="Ej. Hidalgo"></div>
+      <div class="field"><label>Inicia</label>
+        <input id="f-inicio" type="date" value="${grupo ? esc(grupo.fecha_inicio || '') : ''}"></div>
+      <div class="field"><label>Termina</label>
+        <input id="f-fin" type="date" value="${grupo ? esc(grupo.fecha_fin || '') : ''}"></div>
+      <div class="field field-ancho"><label>Fecha del examen
+          <span class="opcional">(el grupo se archiva 15 días después)</span></label>
+        <input id="f-examen" type="date" value="${grupo ? esc(grupo.fecha_examen || '') : ''}"></div>
     </div>
+    <div class="resumen-clase" id="g-resumen"></div>
     <div class="modal-actions">
       ${grupo ? '<button class="btn danger" id="btn-del" style="margin-right:auto">Eliminar</button>' : ''}
       <button class="btn secondary" id="btn-cancel">Cancelar</button>
       <button class="btn" id="btn-save">Guardar</button>
     </div>
   `, (box) => {
+    // Se avisa desde cuando quedaria listo para archivar
+    const resumen = box.querySelector('#g-resumen');
+    function pintarResumen() {
+      const examen = box.querySelector('#f-examen').value;
+      if (!examen) {
+        resumen.textContent = 'Sin fecha de examen el grupo se conserva indefinidamente.';
+        resumen.className = 'resumen-clase';
+        return;
+      }
+      const d = new Date(`${examen}T12:00:00`);
+      d.setDate(d.getDate() + 15);
+      resumen.textContent = `Examen el ${fmtDiaLargo(new Date(`${examen}T12:00:00`))}.`
+        + ` Se podrá archivar a partir del ${fmtDiaLargo(d)}.`;
+      resumen.className = 'resumen-clase';
+    }
+    box.querySelector('#f-examen').addEventListener('change', pintarResumen);
+    pintarResumen();
+
     box.querySelector('#btn-cancel').addEventListener('click', closeModal);
     if (grupo) box.querySelector('#btn-del').addEventListener('click', async () => {
       if (!confirm('¿Eliminar este grupo?')) return;
@@ -1227,12 +1271,17 @@ function grupoFormModal(grupo = null) {
       closeModal(); showToast('Grupo eliminado', 'success'); renderGrupos();
     });
     box.querySelector('#btn-save').addEventListener('click', async () => {
-      const nombre = box.querySelector('#f-nombre').value.trim();
-      const plantel = box.querySelector('#f-plantel').value.trim();
-      if (!nombre) return showToast('El nombre es obligatorio', 'error');
+      const datos = {
+        nombre: box.querySelector('#f-nombre').value.trim(),
+        plantel: box.querySelector('#f-plantel').value.trim(),
+        fecha_inicio: box.querySelector('#f-inicio').value || null,
+        fecha_fin: box.querySelector('#f-fin').value || null,
+        fecha_examen: box.querySelector('#f-examen').value || null,
+      };
+      if (!datos.nombre) return showToast('El nombre es obligatorio', 'error');
       try {
-        if (grupo) await api(`/grupos/${grupo.id}`, { method: 'PUT', body: JSON.stringify({ nombre, plantel }) });
-        else await api('/grupos', { method: 'POST', body: JSON.stringify({ nombre, plantel }) });
+        if (grupo) await api(`/grupos/${grupo.id}`, { method: 'PUT', body: JSON.stringify(datos) });
+        else await api('/grupos', { method: 'POST', body: JSON.stringify(datos) });
         closeModal(); showToast('Grupo guardado', 'success'); renderGrupos();
       } catch (err) { showToast(err.message, 'error'); }
     });
