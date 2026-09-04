@@ -258,9 +258,10 @@
     if (seccion === 'grupos') {
       if (sesion.rol === 'profesor') return sinPermiso();
       if (metodo === 'GET') {
-        const lista = sesion.rol === 'administrativo' && sesion.plantel
+        let lista = sesion.rol === 'administrativo' && sesion.plantel
           ? grupos().filter((g) => g.plantel === sesion.plantel)
           : grupos();
+        if (params.get('archivados') !== 'true') lista = lista.filter((g) => !g.archivado);
         return id ? json(lista.find((g) => String(g.id) === String(id)) || { error: 'No encontrado' }) : json(lista);
       }
       if (!esAdmin) return sinPermiso();
@@ -300,7 +301,11 @@
     if (seccion === 'profesores') {
       if (!esAdmin) return sinPermiso();
       if (metodo === 'GET') {
-        if (!id) return json(profesores());
+        if (!id) {
+          const lista = params.get('bajas') === 'true'
+            ? profesores() : profesores().filter((p) => p.activo !== 0);
+          return json(lista);
+        }
         const p = profesores().find((x) => String(x.id) === String(id));
         if (!p) return json({ error: 'Profesor no encontrado' }, 404);
         return json({ ...p, materias: [], dias_no_disponibles: [] });

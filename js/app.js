@@ -11,6 +11,7 @@ const state = {
   grupos: [],
   calSelectorType: 'profesor', // 'profesor' | 'grupo' | 'salon'
   calVista: 'semana',          // 'dia' | 'semana' | 'mes'
+  verArchivados: false,        // en la vista de grupos
   calSelectedId: null,
   calWeekStart: startOfWeek(new Date()),
 };
@@ -1038,13 +1039,16 @@ async function profesorDetail(id) {
   const root = document.getElementById('view-root');
   root.innerHTML = `
     <div class="view-header">
-      <div><h2>${esc(profesor.nombre)} ${esc(profesor.apellido_paterno || '')}</h2>
+      <div>
+        ${profesor.activo === 0 ? '<div class="sobre-titulo" style="color:var(--danger)">Dado de baja</div>' : ''}
+        <h2>${esc(profesor.nombre)} ${esc(profesor.apellido_paterno || '')}</h2>
         <div class="subtitle">${esc(profesor.correo || 'sin correo')} · ${esc(profesor.celular || 'sin celular')}</div></div>
       <div style="display:flex; gap:8px">
         <button class="btn secondary" id="btn-back">← Volver</button>
         <button class="btn secondary" id="btn-edit">Editar</button>
         <button class="btn secondary" id="btn-ver-horario">Ver horario</button>
-        <button class="btn danger" id="btn-del">Eliminar</button>
+        <button class="btn ${profesor.activo === 0 ? 'secondary' : 'danger'}" id="btn-baja">
+          ${profesor.activo === 0 ? 'Reactivar' : 'Dar de baja'}</button>
       </div>
     </div>
 
@@ -1102,10 +1106,37 @@ async function profesorDetail(id) {
     state.calSelectedId = String(id);
     setView('calendario');
   });
-  document.getElementById('btn-del').addEventListener('click', async () => {
-    if (!confirm(`¿Eliminar al profesor ${profesor.nombre}?`)) return;
-    await api(`/profesores/${id}`, { method: 'DELETE' });
-    showToast('Profesor eliminado', 'success'); renderProfesores();
+  document.getElementById('btn-baja').addEventListener('click', async () => {
+    const reactivar = profesor.activo === 0;
+    if (reactivar) {
+      if (!confirm(`¿Reactivar a ${profesor.nombre}? Volverá a aparecer en las listas.`)) return;
+      try {
+        await api(`/profesores/${id}/baja`, { method: 'PUT', body: JSON.stringify({ activo: true }) });
+        showToast('Profesor reactivado', 'success');
+        profesorDetail(id);
+      } catch (err) { showToast(err.message, 'error'); }
+      return;
+    }
+
+    const motivo = prompt(`Baja de ${profesor.nombre}.\n\nSus clases se conservan como historial.\n`
+      + 'Motivo (opcional):');
+    if (motivo === null) return;
+    if (!confirm(`Confirma la baja de ${profesor.nombre}.\n\n`
+      + 'Deja de aparecer al programar clases y se desactiva su acceso al sistema, '
+      + 'pero SU HISTORIAL SE CONSERVA.')) return;
+
+    try {
+      const r = await api(`/profesores/${id}/baja`, { method: 'PUT', body: JSON.stringify({ motivo }) });
+      let msg = `Baja registrada. Se conservaron ${r.clases_conservadas} clase(s).`;
+      if (r.clases_futuras) msg += ` Hay ${r.clases_futuras} clase(s) futuras por reasignar.`;
+      showToast(msg, 'success');
+      if (r.aviso && r.aviso.skipped) {
+        showToast('No se avisó por correo: falta configurar BAJA_AVISAR_A en el .env', 'info');
+      } else if (r.aviso && r.aviso.ok) {
+        showToast('Se avisó por correo para dar de baja su cuenta institucional', 'info');
+      }
+      profesorDetail(id);
+    } catch (err) { showToast(err.message, 'error'); }
   });
 
   const cursoSel = document.getElementById('asig-curso');
@@ -1165,17 +1196,26 @@ async function profesorDetail(id) {
 
 // ---------- GRUPOS ----------
 async function renderGrupos() {
-  const grupos = await api('/grupos');
+  const grupos = await api(`/grupos${state.verArchivados ? '?archivados=true' : ''}`);
   state.grupos = grupos;
   const root = document.getElementById('view-root');
   root.innerHTML = `
     <div class="view-header">
       <div><h2>Grupos</h2><div class="subtitle">${grupos.length} grupo(s) registrados</div></div>
-      ${esAdmin() ? '<button class="btn" id="btn-new-grupo">+ Nuevo grupo</button>' : ''}
+      <div style="display:flex;gap:9px;align-items:center">
+        <button class="btn ghost small" id="btn-archivados">
+          ${state.verArchivados ? 'Ocultar archivados' : 'Ver archivados'}
+        </button>
+        ${esAdmin() ? '<button class="btn" id="btn-new-grupo">+ Nuevo grupo</button>' : ''}
+      </div>
     </div>
     ${grupos.length ? `<div class="card-grid">${grupos.map(grupoCard).join('')}</div>` :
       emptyState('No hay grupos todavía', esAdmin() ? 'Crea el primero con el botón "+ Nuevo grupo"' : 'Todavía no hay grupos registrados')}
   `;
+  document.getElementById('btn-archivados').addEventListener('click', () => {
+    state.verArchivados = !state.verArchivados;
+    renderGrupos();
+  });
   const btnNuevoGrupo = document.getElementById('btn-new-grupo');
   if (btnNuevoGrupo) btnNuevoGrupo.addEventListener('click', () => grupoFormModal());
   root.querySelectorAll('[data-grupo-id]').forEach((el) => {
@@ -1211,7 +1251,8 @@ function grupoCard(g) {
     if (hoy > limite) estado = '<span class="pill warn">Listo para archivar</span>';
     else if (hoy > new Date(`${g.fecha_examen}T12:00:00`)) estado = '<span class="pill ok">Examen presentado</span>';
   }
-  return `<div class="card" data-grupo-id="${g.id}">
+  if (g.archivado) estado = '<span class="pill">Archivado</span>';
+  return `<div class="card ${g.archivado ? 'archivado' : ''}" data-grupo-id="${g.id}">
     <h3>${esc(g.nombre)}</h3>
     <div class="meta">${esc(g.plantel || 'Sin plantel')}</div>
     <div class="grupo-fechas">
@@ -1241,7 +1282,8 @@ function grupoFormModal(grupo = null) {
     </div>
     <div class="resumen-clase" id="g-resumen"></div>
     <div class="modal-actions">
-      ${grupo ? '<button class="btn danger" id="btn-del" style="margin-right:auto">Eliminar</button>' : ''}
+      ${grupo ? `<button class="btn ghost" id="btn-archivar" style="margin-right:auto">
+        ${grupo.archivado ? 'Desarchivar' : 'Archivar'}</button>` : ''}
       <button class="btn secondary" id="btn-cancel">Cancelar</button>
       <button class="btn" id="btn-save">Guardar</button>
     </div>
@@ -1265,10 +1307,24 @@ function grupoFormModal(grupo = null) {
     pintarResumen();
 
     box.querySelector('#btn-cancel').addEventListener('click', closeModal);
-    if (grupo) box.querySelector('#btn-del').addEventListener('click', async () => {
-      if (!confirm('¿Eliminar este grupo?')) return;
-      await api(`/grupos/${grupo.id}`, { method: 'DELETE' });
-      closeModal(); showToast('Grupo eliminado', 'success'); renderGrupos();
+
+    if (grupo) box.querySelector('#btn-archivar').addEventListener('click', async () => {
+      const archivar = !grupo.archivado;
+      const aviso = archivar
+        ? `Se archivará el grupo ${grupo.nombre}.\n\nDeja de aparecer al programar clases, `
+          + 'pero SUS CLASES SE CONSERVAN: son el historial de los profesores que estuvieron ahí.'
+        : `Se reactivará el grupo ${grupo.nombre} y volverá a aparecer en las listas.`;
+      if (!confirm(aviso)) return;
+      try {
+        const r = await api(`/grupos/${grupo.id}/archivar`, {
+          method: 'PUT', body: JSON.stringify({ archivado: archivar }),
+        });
+        closeModal();
+        showToast(archivar
+          ? `Grupo archivado. Se conservaron ${r.clases_conservadas} clase(s).`
+          : 'Grupo reactivado', 'success');
+        renderGrupos();
+      } catch (err) { showToast(err.message, 'error'); }
     });
     box.querySelector('#btn-save').addEventListener('click', async () => {
       const datos = {

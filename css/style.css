@@ -1014,3 +1014,7 @@ td { font-variant-numeric: tabular-nums; }
 }
 .grupo-fechas b { color: var(--text-soft); font-weight: 600; display: inline-block; min-width: 54px; }
 .card .pill { margin-top: 9px; }
+
+/* Grupo archivado: se ve, pero apagado */
+.card.archivado { opacity: .62; background: var(--surface-2); }
+.card.archivado h3 { text-decoration: line-through; text-decoration-thickness: 1px; }
